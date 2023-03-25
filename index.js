@@ -38,7 +38,8 @@ async function openGateway() {
     registerGatewayEvents();
 }
 
-async function registerGatewayEvents() {
+let heartbeatInterval
+function registerGatewayEvents() {
     gatewayConnection.on('open', () => {
         console.log("Connected to gateway");
         channelMap.forEach(channelMapping => {
@@ -47,6 +48,12 @@ async function registerGatewayEvents() {
                 "message": `channel_${channelMapping.lightquark}`
             }));
         });
+        heartbeatInterval = setInterval(() => {
+            gatewayConnection.send(JSON.stringify({
+                "event": "heartbeat",
+                "message": "hb"
+            }))
+        }, 20000)
     });
 
     gatewayConnection.on('message', async (data) => {
@@ -61,20 +68,23 @@ async function registerGatewayEvents() {
                 let webhooks = await channel.fetchWebhooks();
                 let webhook = webhooks.find(w => w.name === "Quarkcord");
                 if (!webhook) webhook = await channel.createWebhook({name: "Quarkcord", avatar: "https://lq.litdevs.org/alt_alt_icon.svg"});
-                webhook.send({
-                    content: message.message.content,
-                    allowedMentions: { parse: [] },
-                    username: message.author.username,
-                    avatarURL: message.author.avatarUri
+                let attachmentString = ""
+                message.message.attachments.forEach(a => {
+                    attachmentString += `\n${a}`
                 })
+                await webhook.send({
+                    content: `${message.message.content}${attachmentString.length > 0 ? `\n\nAttachments:${attachmentString}` : "" }`,
+                    allowedMentions: { parse: [] },
+                    username: `${message.author.username} via ${message.message.ua}`,
+                    avatarURL: `${message.author.avatarUri}?format=png`
+                }).catch((e) => console.log(e))
             break;
 
         }
     });
 
     gatewayConnection.on('close', () => {
-        console.log("Disconnected from gateway");
-        openGateway();
+        process.exit(1);
     });
 
     gatewayConnection.on("error", (e) => {
@@ -86,12 +96,13 @@ async function registerGatewayEvents() {
 openGateway();
 
 async function transformToLq(message) {
+    if (message.content.length === 0 && message.attachments.size === 0) return;
     let lqMessageEvent = {
         content: message.content,
         specialAttributes: [{
             type: "botMessage",
             username: message.author.username,
-            avatarUri: message.author.avatarURL({ dynamic: true, size: 128 })
+            avatarUri: message.author.avatarURL({ size: 128 })
         }]
     };
 
@@ -134,11 +145,13 @@ const channelMap = [
 ]
 
 client.on('messageCreate', async message => {
-    if (message.webhookId) return;
-    if(message.author.id === client.user.id) return;
     if (message.guild.id !== trackingGuild) return;
     let channelMapping = channelMap.find(c => c.discord === message.channel.id);
     if (!channelMapping) return;
+
+
+    if (message.webhookId) return;
+    if(message.author.id === client.user.id) return;
 
     const lqMessageEvent = await transformToLq(message); 
     const lqApiUrl = `https://lq.litdevs.org/v2/channel/${channelMapping.lightquark}/messages`;
