@@ -72,8 +72,19 @@ function registerGatewayEvents() {
                 message.message.attachments.forEach(a => {
                     attachmentString += `\n${a}`
                 })
+		let plaintextContent
+		if (message?.message?.specialAttributes?.some(a => a.type === "clientAttributes")) {
+			plaintextContent = message.message.specialAttributes.find(a => a.type === "clientAttributes")?.plaintext;
+		}
+                let emoteRegex = /<(?<emoteName>[^:\s]+):(?<emoteId>[a-f0-9]+)>/gm;
+                message.message.content = message.message.content.replace(emoteRegex, (match, emoteName, emoteId) => {
+                    return `https://equinox.litdevs.org/v2/quark/emotes/${emoteId}/image`
+                });
+                plaintextContent = plaintextContent.replace(emoteRegex, (match, emoteName, emoteId) => {
+                    return `https://equinox.litdevs.org/v2/quark/emotes/${emoteId}/image`
+                });
                 await webhook.send({
-                    content: `${message.message.content}${attachmentString.length > 0 ? `\n\nAttachments:${attachmentString}` : "" }`,
+                    content: `${message.message.content}${plaintextContent && plaintextContent !== message.message.content ? "\n||" + plaintextContent + "||" : ""}${attachmentString.length > 0 ? `\n\nAttachments:${attachmentString}` : "" }`,
                     allowedMentions: { parse: [] },
                     username: `${message.author.username} via ${message.message.ua}`,
                     avatarURL: `${message.author.avatarUri}?format=png`
@@ -149,8 +160,13 @@ client.on('messageCreate', async message => {
     let channelMapping = channelMap.find(c => c.discord === message.channel.id);
     if (!channelMapping) return;
 
-
-    if (message.webhookId) return;
+    if (message.webhookId) {
+        let webhooks = await message.channel.fetchWebhooks();
+        let webhook = webhooks.find(w => w.name === "Quarkcord");
+        console.log(typeof webhook.id, typeof message.webhookId)
+        console.log("Are equal?", webhook.id === message.webhookId)
+        if (webhook.id == message.webhookId) return;
+    }
     if(message.author.id === client.user.id) return;
 
     const lqMessageEvent = await transformToLq(message); 
