@@ -11,7 +11,7 @@ client.on('ready', () => {
 
 async function obtainLqToken() {
     try {
-        let res = await axios.post("https://lq.litdevs.org/v1/auth/token", {email: process.env.LQ_EMAIL, password: process.env.LQ_PASS});
+        let res = await axios.post("https://equinox.litdevs.org/v1/auth/token", {email: process.env.LQ_EMAIL, password: process.env.LQ_PASS});
         return res.data.response.access_token;
     } catch (e) {
         console.error(e.status);
@@ -22,7 +22,7 @@ let lqToken = obtainLqToken();
 
 async function obtainLqUser() {
     try {
-        let res = await axios.get("https://lq.litdevs.org/v1/user/me", {headers: {"Authorization": `Bearer ${await lqToken}`}});
+        let res = await axios.get("https://equinox.litdevs.org/v1/user/me", {headers: {"Authorization": `Bearer ${await lqToken}`}});
         return res.data.response.jwtData;
     } catch (e) {
         console.error(e.status);
@@ -34,7 +34,7 @@ let lqUser = obtainLqUser();
 let gatewayConnection
 
 async function openGateway() {
-    gatewayConnection = new WebSocket("wss://lq-gateway.litdevs.org", await lqToken);
+    gatewayConnection = new WebSocket("wss://equinox-gateway.litdevs.org", await lqToken);
     registerGatewayEvents();
 }
 
@@ -66,16 +66,27 @@ function registerGatewayEvents() {
                 let channel = await client.channels.fetch(channelMapping.discord);
                 if (!channel) return;
                 let webhooks = await channel.fetchWebhooks();
-                let webhook = webhooks.find(w => w.name === "Quarkcord");
-                if (!webhook) webhook = await channel.createWebhook({name: "Quarkcord", avatar: "https://lq.litdevs.org/alt_alt_icon.svg"});
+                let webhook = webhooks.find(w => w.name === "Quarkcord Dev");
+                if (!webhook) webhook = await channel.createWebhook({name: "Quarkcord Dev", avatar: "https://ems-api.litdevs.org/v1/pm2/icon/quarkcord-dev"});
                 let attachmentString = ""
                 message.message.attachments.forEach(a => {
                     attachmentString += `\n${a}`
                 })
+        let plaintextContent
+        if (message?.message?.specialAttributes?.some(a => a.type === "clientAttributes")) {
+            plaintextContent = message.message.specialAttributes.find(a => a.type === "clientAttributes")?.plaintext;
+        }
+                let emoteRegex = /<(?<emoteName>[^:\s]+):(?<emoteId>[a-f0-9]+)>/gm;
+                message.message.content = message.message.content.replace(emoteRegex, (match, emoteName, emoteId) => {
+                    return `https://equinox.litdevs.org/v2/quark/emotes/${emoteId}/image`
+                });
+                plaintextContent = plaintextContent.replace(emoteRegex, (match, emoteName, emoteId) => {
+                    return `https://equinox.litdevs.org/v2/quark/emotes/${emoteId}/image`
+                });
                 await webhook.send({
-                    content: `${message.message.content}${attachmentString.length > 0 ? `\n\nAttachments:${attachmentString}` : "" }`,
+                    content: `${message.message.content}${plaintextContent && plaintextContent !== message.message.content ? "\n||" + plaintextContent + "||" : ""}${attachmentString.length > 0 ? `\n\nAttachments:${attachmentString}` : "" }`,
                     allowedMentions: { parse: [] },
-                    username: `${message.author.username} via ${message.message.ua}`,
+                    username: `${message.author.username} via ${message.message.ua} (Dev network)`,
                     avatarURL: `${message.author.avatarUri}?format=png`
                 }).catch((e) => console.log(e))
             break;
@@ -128,19 +139,19 @@ const trackingGuild = "868937321402204220"
 const channelMap = [
     {
         discord: "1020209219472990228",
-        lightquark: "638b815b4d55b470d9d6fa19"
+        lightquark: "643aa2e550c913775aec2057"
     },
     {
         discord: "951924511509471293",
-        lightquark: "63eb7cadecc96ed5edc25b4a"
+        lightquark: "643aa31450c913775aec2082"
     },
     {
         discord: "1051255515176513646",
-        lightquark: "63eb7cc7ecc96ed5edc267fc"
+        lightquark: "643aa32c50c913775aec20a2"
     },
     {
         discord: "997976909596086292",
-        lightquark: "63eb7ccfecc96ed5edc26c27"
+        lightquark: "643aa31f50c913775aec2092"
     }
 ]
 
@@ -150,11 +161,17 @@ client.on('messageCreate', async message => {
     if (!channelMapping) return;
 
 
-    if (message.webhookId) return;
+    if (message.webhookId) {
+        let webhooks = await message.channel.fetchWebhooks();
+        let webhook = webhooks.find(w => w.name === "Quarkcord Dev");
+        console.log(typeof webhook.id, typeof message.webhookId)
+        console.log("Are equal?", webhook.id === message.webhookId)
+        if (webhook.id == message.webhookId) return;
+    }
     if(message.author.id === client.user.id) return;
 
     const lqMessageEvent = await transformToLq(message); 
-    const lqApiUrl = `https://lq.litdevs.org/v2/channel/${channelMapping.lightquark}/messages`;
+    const lqApiUrl = `https://equinox.litdevs.org/v2/channel/${channelMapping.lightquark}/messages`;
 
     try {
         await axios({
@@ -164,7 +181,7 @@ client.on('messageCreate', async message => {
             headers: {
                 "Authorization": `Bearer ${await lqToken}`,
                 "Content-Type": "application/json",
-                "lq-agent": "Quarkcord Bridge"
+                "lq-agent": "Quarkcord Bridge Dev"
             }
         })
     } catch (e) {
