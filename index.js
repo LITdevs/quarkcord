@@ -80,7 +80,7 @@ function registerGatewayEvents() {
                 message.message.content = message.message.content.replace(emoteRegex, (match, emoteName, emoteId) => {
                     return `https://equinox.litdevs.org/v2/quark/emotes/${emoteId}/image`
                 });
-                plaintextContent = plaintextContent.replace(emoteRegex, (match, emoteName, emoteId) => {
+                plaintextContent = plaintextContent?.replace(emoteRegex, (match, emoteName, emoteId) => {
                     return `https://equinox.litdevs.org/v2/quark/emotes/${emoteId}/image`
                 });
                 await webhook.send({
